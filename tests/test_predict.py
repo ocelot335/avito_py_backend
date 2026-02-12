@@ -1,133 +1,126 @@
+import pytest
+import os
+from unittest.mock import MagicMock
+import numpy as np
 from fastapi.testclient import TestClient
+from config.config import Settings, get_settings
 from main import app
 from routers.predict import get_prediction_service
-from models.prediction import PredictionRequestDto
+from services.predict import PredictionService
 
 client = TestClient(app)
 
 
-def test_predict_approve_verified_seller():
-    payload = {
+@pytest.fixture(scope="session")
+def test_settings():
+    return Settings(model_path="test_model.pkl", log_level="DEBUG")
+
+
+@pytest.fixture(autouse=True)
+def override_settings(test_settings):
+    app.dependency_overrides[get_settings] = lambda: test_settings
+    yield
+    app.dependency_overrides = {}
+
+    if os.path.exists(test_settings.model_path):
+        os.remove(test_settings.model_path)
+
+
+@pytest.fixture
+def valid_payload():
+    return {
         "seller_id": 123,
         "is_verified_seller": True,
         "item_id": 456,
-        "name": "iPhone",
-        "description": "phone",
-        "category": 10,
-        "images_qty": 0,
-    }
-
-    response = client.post("/predict/", json=payload)
-
-    assert response.status_code == 200
-    assert response.json() == {"result": True}
-
-
-def test_predict_approve_with_images():
-    payload = {
-        "seller_id": 123,
-        "is_verified_seller": False,
-        "item_id": 456,
-        "name": "iPhone",
-        "description": "phone",
+        "name": "iPhone 15",
+        "description": "Just a phone",
         "category": 10,
         "images_qty": 5,
     }
 
-    response = client.post("/predict/", json=payload)
+
+@pytest.fixture
+def mock_model():
+    model = MagicMock()
+    model.predict_proba.return_value = np.array([[0.5, 0.5]])
+    return model
+
+
+@pytest.fixture
+def override_dependency(mock_model):
+    service = PredictionService(model=mock_model)
+    app.dependency_overrides[get_prediction_service] = lambda: service
+    yield service
+    app.dependency_overrides = {}
+
+
+def test_predict_violation_true(
+    override_dependency, mock_model, valid_payload
+):
+    mock_model.predict_proba.return_value = np.array([[0.15, 0.85]])
+
+    response = client.post("/predict/", json=valid_payload)
 
     assert response.status_code == 200
-    assert response.json() == {"result": True}
-
-
-def test_predict_reject():
-    payload = {
-        "seller_id": 123,
-        "is_verified_seller": False,
-        "item_id": 456,
-        "name": "iPhone",
-        "description": "phone",
-        "category": 10,
-        "images_qty": 0,
-    }
-
-    response = client.post("/predict/", json=payload)
-
-    assert response.status_code == 200
-    assert response.json() == {"result": False}
-
-
-def test_validation_error_missing_field():
-    payload = {
-        "seller_id": 123,
-        "is_verified_seller": False,
-        "item_id": 456,
-        "name": "iPhone",
-        "description": "phone",
-        "category": 10,
-    }
-
-    response = client.post("/predict/", json=payload)
-
-    assert response.status_code == 422
     data = response.json()
-    assert data["detail"][0]["loc"] == ["body", "images_qty"]
-    assert data["detail"][0]["type"] == "missing"
+    assert data["is_violation"] is True
+    assert data["probability"] == 0.85
 
 
-def test_validation_error_wrong_type():
-    payload = {
-        "seller_id": "x",
-        "is_verified_seller": False,
-        "item_id": 456,
-        "name": "iPhone",
-        "description": "phone",
-        "category": 10,
-        "images_qty": 5,
-    }
+def test_predict_violation_false(
+    override_dependency, mock_model, valid_payload
+):
+    mock_model.predict_proba.return_value = np.array([[0.95, 0.05]])
+
+    response = client.post("/predict/", json=valid_payload)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_violation"] is False
+    assert data["probability"] == 0.05
+
+
+def test_service_unavailable_no_model(valid_payload):
+    service = PredictionService(model=None)
+    app.dependency_overrides[get_prediction_service] = lambda: service
+
+    response = client.post("/predict/", json=valid_payload)
+
+    assert response.status_code == 503
+
+    app.dependency_overrides = {}
+
+
+def test_validation_error_wrong_type(override_dependency, valid_payload):
+    payload = valid_payload
+    payload["seller_id"] = "asdf"
 
     response = client.post("/predict/", json=payload)
+
     assert response.status_code == 422
     data = response.json()
     assert data["detail"][0]["loc"] == ["body", "seller_id"]
     assert data["detail"][0]["type"] == "int_parsing"
 
 
-def test_validation_constraint_violation():
-    payload = {
-        "seller_id": 123,
-        "is_verified_seller": False,
-        "item_id": 456,
-        "name": "iPhone",
-        "description": "phone",
-        "category": 10,
-        "images_qty": -5,
-    }
+def test_validation_max_length_description(override_dependency, valid_payload):
+    payload = valid_payload
+    payload["description"] = "a" * 1001
+
     response = client.post("/predict/", json=payload)
+
     assert response.status_code == 422
-    assert "greater than or equal to 0" in response.json()["detail"][0]["msg"]
+    data = response.json()
+    assert data["detail"][0]["loc"] == ["body", "description"]
+    assert "string_too_long" in data["detail"][0]["type"]
 
 
-def test_business_logic_exception():
-    class MockService:
-        def predict_ad_approve(self, ad: PredictionRequestDto) -> bool:
-            raise ValueError()
+def test_internal_error_during_prediction(
+    override_dependency, mock_model, valid_payload
+):
+    mock_model.predict_proba.side_effect = Exception("Sklearn crashed!")
 
-    app.dependency_overrides[get_prediction_service] = lambda: MockService()
-
-    payload = {
-        "seller_id": 123,
-        "is_verified_seller": False,
-        "item_id": 456,
-        "name": "iPhone",
-        "description": "phone",
-        "category": 10,
-        "images_qty": 5,
-    }
-
-    with TestClient(app, raise_server_exceptions=False) as test_client:
-        response = test_client.post("/predict/", json=payload)
+    with TestClient(app, raise_server_exceptions=False) as tc:
+        response = tc.post("/predict/", json=valid_payload)
 
         assert response.status_code == 500
-
-    app.dependency_overrides = {}

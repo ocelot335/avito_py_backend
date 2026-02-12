@@ -6,10 +6,11 @@ class PredictionRequestDto(BaseModel):
     is_verified_seller: bool
     item_id: int = Field(..., ge=0)
     name: str
-    description: str
-    category: int
-    images_qty: int = Field(..., ge=0)
+    description: str = Field(..., max_length=1000)
+    category: int = Field(..., ge=0, le=100)
+    images_qty: int = Field(..., ge=0, le=10)
 
 
 class PredictionResponseDto(BaseModel):
-    result: bool
+    is_violation: bool
+    probability: float

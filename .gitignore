@@ -18,6 +18,13 @@ htmlcov/
 .env
 .env.*
 
+*.pkl
+*.joblib
+
+mlruns/
+mlflow.db
+.trash/
+
 .DS_Store
 Thumbs.db
 Desktop.ini
