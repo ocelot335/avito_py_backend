@@ -7,6 +7,7 @@ from ml.model import load_or_train_model
 import uvicorn
 
 from services.predict import PredictionService
+from db.database import create_pool, close_pool
 
 settings = get_settings()
 
@@ -16,6 +17,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        pool = await create_pool()
+        app.state.db_pool = pool
+        logger.info("пул соединений к бд готов")
+    except Exception as e:
+        logger.error(f"не удалось создать пул соединений к бд: {e}")
+        raise
+
     service = PredictionService(model=None)
     app.state.prediction_service = service
 
@@ -26,6 +35,10 @@ async def lifespan(app: FastAPI):
         logger.error(f"не получилось загрузить модель {e}")
 
     yield
+
+    pool = getattr(app.state, "db_pool", None)
+    await close_pool(pool)
+    logger.info("приложение остановлено")
 
 
 app = FastAPI(lifespan=lifespan)
