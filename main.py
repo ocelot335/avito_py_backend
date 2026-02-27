@@ -8,6 +8,7 @@ import uvicorn
 
 from services.predict import PredictionService
 from db.database import create_pool, close_pool
+from clients.kafka import KafkaProducerClient
 
 settings = get_settings()
 
@@ -27,14 +28,24 @@ async def lifespan(app: FastAPI):
 
     service = PredictionService(model=None)
     app.state.prediction_service = service
-
     try:
         model = load_or_train_model()
         service.model = model
     except Exception as e:
         logger.error(f"не получилось загрузить модель {e}")
 
+    kafka_client = KafkaProducerClient()
+    try:
+        await kafka_client.start()
+        app.state.kafka_client = kafka_client
+    except Exception as e:
+        logger.error(f"не удалось запустить kafka producer {e}")
+        raise
+
     yield
+
+    if hasattr(app.state, "kafka_client"):
+        await app.state.kafka_client.stop()
 
     pool = getattr(app.state, "db_pool", None)
     await close_pool(pool)

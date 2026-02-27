@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     postgres_port: int
     postgres_host: str = "localhost"
 
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_moderation_topic: str = "moderation"
+    kafka_dlq_topic: str = "moderation_dlq"
+    kafka_consumer_group: str = "moderation_group"
+
+    max_retries: int = 3
+    retry_delay_seconds: int = 5
+
     @property
     def database_url(self) -> str:
         return (

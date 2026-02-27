@@ -24,6 +24,13 @@ class PredictionService:
     def predict_ad_approve(
         self, ad: PredictionRequestDto
     ) -> PredictionResponseDto:
+
+        if "POSION_PILL_67_67" in ad.description:
+            logger.error("имитация падения ML-модели.")
+            raise ValueError(
+                "модель не смогла обработать этот текст(SegFault)"
+            )
+
         if self.model is None:
             logger.warning("ml-модель не загружена")
             raise HTTPException(
