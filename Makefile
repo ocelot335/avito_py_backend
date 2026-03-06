@@ -17,3 +17,9 @@ worker:
 
 test:
 	pytest -v
+
+test-unit:
+	pytest -m "not integration" -v
+
+test-integration:
+	pytest -m integration -v

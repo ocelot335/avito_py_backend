@@ -1,5 +1,4 @@
 import logging
-from typing import AsyncGenerator
 import asyncpg
 from fastapi import Request
 
@@ -24,12 +23,8 @@ async def close_pool(pool: asyncpg.Pool | None):
         logger.info("пул соединений с бд закрыт")
 
 
-async def get_db_connection(
-    request: Request,
-) -> AsyncGenerator[asyncpg.Connection, None]:
-    pool: asyncpg.Pool = request.app.state.db_pool
+def get_db_pool(request: Request) -> asyncpg.Pool:
+    pool: asyncpg.Pool = getattr(request.app.state, "db_pool", None)
     if pool is None:
         raise RuntimeError("пул соединений с бд не найден в app.state")
-
-    async with pool.acquire() as connection:
-        yield connection
+    return pool

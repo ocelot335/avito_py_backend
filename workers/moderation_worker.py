@@ -32,44 +32,42 @@ async def process_message(
         )
         return
 
+    ad_repo = AdRepository(db_pool)
+    task_repo = ModerationTaskRepository(db_pool)
+
     for attempt in range(1, settings.max_retries + 1):
         try:
-            async with db_pool.acquire() as conn:
-                ad_repo = AdRepository(conn)
-                task_repo = ModerationTaskRepository(conn)
+            ad_features = await ad_repo.get_ad_features(item_id)
+            if not ad_features:
+                raise ValueError(f"объявление с id {item_id} не найдено в бд")
 
-                ad_features = await ad_repo.get_ad_features(item_id)
-                if not ad_features:
-                    raise ValueError(
-                        f"объявление с id {item_id} не найдено в бд"
-                    )
+            ml_request = PredictionRequestDto(
+                seller_id=ad_features.seller_id,
+                is_verified_seller=ad_features.is_verified_seller,
+                item_id=ad_features.item_id,
+                name=ad_features.title,
+                description=ad_features.description,
+                category=ad_features.category_id,
+                images_qty=ad_features.images_qty,
+            )
 
-                ml_request = PredictionRequestDto(
-                    seller_id=ad_features.seller_id,
-                    is_verified_seller=ad_features.is_verified_seller,
-                    item_id=ad_features.item_id,
-                    name=ad_features.title,
-                    description=ad_features.description,
-                    category=ad_features.category_id,
-                    images_qty=ad_features.images_qty,
-                )
+            result = prediction_service.predict_ad_approve(ml_request)
 
-                result = prediction_service.predict_ad_approve(ml_request)
+            await task_repo.update_moderation_task_success(
+                task_id=task_id,
+                is_violation=result.is_violation,
+                probability=result.probability,
+            )
+            logger.info(
+                f"task_id={task_id} завершён успешно, попытка {attempt}"
+            )
+            return
 
-                await task_repo.update_moderation_task_success(
-                    task_id=task_id,
-                    is_violation=result.is_violation,
-                    probability=result.probability,
-                )
-                logger.info(
-                    f"task_id={task_id} завершён успешно, попытка {attempt}"
-                )
-                return
         except Exception as e:
             error_msg = str(e)
             if attempt < settings.max_retries:
                 logger.warning(
-                    f"ошибка при обработке task_id={task_id}: {e}"
+                    f"ошибка при обработке task_id={task_id}: {e} "
                     f"таймер {settings.retry_delay_seconds} сек перед следующей попыткой"
                 )
                 await asyncio.sleep(settings.retry_delay_seconds)
@@ -81,13 +79,11 @@ async def process_message(
                 )
 
                 try:
-                    async with db_pool.acquire() as conn:
-                        task_repo = ModerationTaskRepository(conn)
-                        await task_repo.update_moderation_task_status(
-                            task_id=task_id,
-                            status="failed",
-                            error_message=error_msg,
-                        )
+                    await task_repo.update_moderation_task_status(
+                        task_id=task_id,
+                        status="failed",
+                        error_message=error_msg,
+                    )
                 except Exception as db_err:
                     logger.error(
                         f"не удалось обновить статус в бд для task_id({task_id}): {db_err}"

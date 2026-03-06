@@ -84,6 +84,7 @@ python-multipart==0.0.22
 pytz==2025.2
 pywin32==311
 PyYAML==6.0.3
+redis==7.2.1
 requests==2.32.5
 rich==14.3.1
 rich-toolkit==0.17.1
@@ -98,6 +99,7 @@ smmap==5.0.2
 SQLAlchemy==2.0.46
 sqlparse==0.5.5
 starlette==0.50.0
+testcontainers==4.14.1
 threadpoolctl==3.6.0
 typer==0.21.1
 typing-inspection==0.4.2
@@ -109,5 +111,6 @@ waitress==3.0.2
 watchfiles==1.1.1
 websockets==16.0
 Werkzeug==3.1.5
+wrapt==2.1.2
 yandex-pgmigrate==1.0.10
 zipp==3.23.0

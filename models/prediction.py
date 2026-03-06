@@ -40,3 +40,8 @@ class SeedTestDataRequestDto(BaseModel):
     )
     category_id: int = Field(default=10)
     images_qty: int = Field(default=5)
+
+
+class CloseAdResponseDto(BaseModel):
+    message: str
+    item_id: int

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -15,6 +16,7 @@ class AdDto(BaseModel):
     description: str
     category_id: int
     images_qty: int
+    is_closed: bool
     created_at: datetime
 
 
@@ -26,3 +28,10 @@ class AdFeaturesDto(BaseModel):
     description: str
     category_id: int
     images_qty: int
+
+
+class ModerationTaskDto(BaseModel):
+    task_id: int
+    status: str
+    is_violation: Optional[bool] = None
+    probability: Optional[float] = None

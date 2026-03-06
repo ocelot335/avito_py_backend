@@ -9,6 +9,7 @@ import uvicorn
 from services.predict import PredictionService
 from db.database import create_pool, close_pool
 from clients.kafka import KafkaProducerClient
+from clients.redis import RedisClient
 
 settings = get_settings()
 
@@ -24,6 +25,14 @@ async def lifespan(app: FastAPI):
         logger.info("пул соединений к бд готов")
     except Exception as e:
         logger.error(f"не удалось создать пул соединений к бд: {e}")
+        raise
+
+    redis_client = RedisClient()
+    try:
+        await redis_client.ping()
+        app.state.redis_client = redis_client
+    except Exception as e:
+        logger.error(f"не удалось подключиться к redis: {e}")
         raise
 
     service = PredictionService(model=None)
@@ -46,6 +55,9 @@ async def lifespan(app: FastAPI):
 
     if hasattr(app.state, "kafka_client"):
         await app.state.kafka_client.stop()
+
+    if hasattr(app.state, "redis_client"):
+        await app.state.redis_client.close()
 
     pool = getattr(app.state, "db_pool", None)
     await close_pool(pool)

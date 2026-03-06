@@ -48,6 +48,16 @@ services:
     depends_on:
       - redpanda
 
+  redis:
+    image: redis:7-alpine
+    container_name: avito_backend_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
 volumes:
   pg_data:
   redpanda_data:
+  redis_data:
