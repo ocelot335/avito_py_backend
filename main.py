@@ -5,13 +5,24 @@ from config.config import get_settings
 from routers.predict import predict_router
 from ml.model import load_or_train_model
 import uvicorn
+import sentry_sdk
 
 from services.predict import PredictionService
 from db.database import create_pool, close_pool
 from clients.kafka import KafkaProducerClient
 from clients.redis import RedisClient
 
+from middlewares.prometheus import PrometheusMiddleware
+from routers.system import system_router
+
 settings = get_settings()
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=1.0,
+        environment="development",
+    )
 
 logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
@@ -66,6 +77,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(PrometheusMiddleware)
+
 
 @app.get("/")
 async def root():
@@ -73,6 +86,7 @@ async def root():
 
 
 app.include_router(predict_router, prefix="/predict")
+app.include_router(system_router)
 
 if __name__ == "__main__":
     uvicorn.run(app, host=settings.host, port=settings.port)

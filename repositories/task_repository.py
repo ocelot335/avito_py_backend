@@ -2,12 +2,14 @@ import asyncpg
 from fastapi import Depends
 from db.database import get_db_pool
 from models.db import ModerationTaskDto
+from metrics import measure_db_query
 
 
 class ModerationTaskRepository:
     def __init__(self, pool: asyncpg.Pool):
         self._pool = pool
 
+    @measure_db_query(query_type="insert")
     async def create_moderation_task(self, item_id: int) -> int:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -16,6 +18,7 @@ class ModerationTaskRepository:
             )
             return row["id"]
 
+    @measure_db_query(query_type="update")
     async def update_moderation_task_status(
         self, task_id: int, status: str, error_message: str = None
     ) -> None:
@@ -31,6 +34,7 @@ class ModerationTaskRepository:
                 error_message,
             )
 
+    @measure_db_query(query_type="update")
     async def update_moderation_task_success(
         self, task_id: int, is_violation: bool, probability: float
     ) -> None:
@@ -46,6 +50,7 @@ class ModerationTaskRepository:
                 probability,
             )
 
+    @measure_db_query(query_type="select")
     async def get_moderation_task(
         self, task_id: int
     ) -> ModerationTaskDto | None:
@@ -60,6 +65,7 @@ class ModerationTaskRepository:
             )
             return ModerationTaskDto(**dict(row)) if row else None
 
+    @measure_db_query(query_type="select")
     async def get_task_ids_by_item_id(self, item_id: int) -> list[int]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
@@ -67,6 +73,7 @@ class ModerationTaskRepository:
             )
             return [row["id"] for row in rows]
 
+    @measure_db_query(query_type="delete")
     async def delete_tasks_by_item_id(self, item_id: int) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(

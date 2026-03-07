@@ -1,4 +1,10 @@
 from fastapi import APIRouter, Depends, status, Request, Path, HTTPException
+import sentry_sdk
+from exceptions import (
+    AdvertisementNotFoundError,
+    MessageBrokerError,
+    TaskNotFoundError,
+)
 from services.predict import PredictionService
 from models.prediction import (
     CloseAdResponseDto,
@@ -85,10 +91,9 @@ async def simple_predict(
     ad_features = await repo.get_ad_features(item_id)
 
     if not ad_features:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"объявление с id {item_id} не найдено",
-        )
+        e = AdvertisementNotFoundError(f"объявление с id {item_id} не найдено")
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(status_code=404, detail=str(e))
 
     ml_request = PredictionRequestDto(
         seller_id=ad_features.seller_id,
@@ -130,10 +135,9 @@ async def async_predict(
         )
     ad = await ad_repo.get_ad_by_id(item_id)
     if not ad:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Объявление с id {item_id} не найдено",
-        )
+        e = AdvertisementNotFoundError(f"Объявление с id {item_id} не найдено")
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(status_code=404, detail=str(e))
 
     task_id = await task_repo.create_moderation_task(item_id)
 
@@ -141,15 +145,20 @@ async def async_predict(
         await kafka_client.send_moderation_request(
             item_id=item_id, task_id=task_id
         )
-    except Exception as e:
-        error_msg = f"ошибка брокера сообщений: {str(e)}"
+    except Exception as raw_e:
+        error_msg = f"ошибка брокера сообщений: {str(raw_e)}"
         await task_repo.update_moderation_task_status(
             task_id=task_id, status="failed", error_message=error_msg
         )
 
         logger.error(
-            f"произошла ошибка при отправке в kafka для задания {task_id}. Помечено в бд со следующим сообщением: {e}"
+            f"произошла ошибка при отправке в kafka для задания {task_id}. "
+            f"Помечено в бд со следующим сообщением: {raw_e}"
         )
+
+        e = MessageBrokerError(f"kafka error(task_id={task_id}): {raw_e}")
+        sentry_sdk.capture_exception(e)
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="не удалось отправить задачу в очередь",
@@ -181,10 +190,11 @@ async def get_moderation_result(
     task_data = await task_repo.get_moderation_task(task_id)
 
     if not task_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"задача модерации с таким task_id({task_id}) не найдена",
+        e = TaskNotFoundError(
+            f"Задача модерации с таким task_id({task_id}) не найдена"
         )
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(status_code=404, detail=str(e))
 
     # пояснение в storages/task_redis_storage.py
     if task_data.status == "pending":
@@ -216,9 +226,9 @@ async def close_ad(
 ):
     ad = await ad_repo.get_ad_by_id(item_id)
     if not ad:
-        raise HTTPException(
-            status_code=404, detail=f"Объявление {item_id} не найдено"
-        )
+        e = AdvertisementNotFoundError(f"Объявление с id {item_id} не найдено")
+        sentry_sdk.capture_exception(e)
+        raise HTTPException(status_code=404, detail=str(e))
 
     if ad.is_closed:
         return {"message": "Объявление уже закрыто", "item_id": item_id}

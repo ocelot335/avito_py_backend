@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +36,8 @@ class Settings(BaseSettings):
     redis_task_pending_ttl_sec: int = 3
     redis_task_completed_ttl_sec: int = 3600
     redis_active_task_ttl_sec: int = 60
+
+    sentry_dsn: Optional[str] = None
 
     @property
     def redis_url(self) -> str:

@@ -2,12 +2,14 @@ import asyncpg
 from fastapi import Depends
 from db.database import get_db_pool
 from models.db import AdDto, AdFeaturesDto
+from metrics import measure_db_query
 
 
 class AdRepository:
     def __init__(self, pool: asyncpg.Pool):
         self._pool = pool
 
+    @measure_db_query(query_type="select")
     async def get_ad_by_id(self, item_id: int) -> AdDto | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -19,6 +21,7 @@ class AdRepository:
             )
             return AdDto(**dict(row)) if row else None
 
+    @measure_db_query(query_type="select")
     async def get_ad_features(self, item_id: int) -> AdFeaturesDto | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
@@ -35,6 +38,7 @@ class AdRepository:
             )
             return AdFeaturesDto(**dict(row)) if row else None
 
+    @measure_db_query(query_type="insert")
     async def create_ad(
         self,
         item_id: int,
@@ -63,6 +67,7 @@ class AdRepository:
             )
             return AdDto(**dict(row))
 
+    @measure_db_query(query_type="update")
     async def close_ad(self, item_id: int) -> None:
         async with self._pool.acquire() as conn:
             await conn.execute(

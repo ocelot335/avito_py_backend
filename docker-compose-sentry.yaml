@@ -1,0 +1,42 @@
+version: "3.9"
+
+x-environment: &glitchtip-environment
+  DATABASE_URL: postgres://glitchtip:password@glitchtip-db:5432/glitchtip
+  REDIS_URL: redis://glitchtip-redis:6379
+  SECRET_KEY: super-secret-key-12345
+  PORT: 8000
+  GLITCHTIP_DOMAIN: http://localhost:8000
+  EMAIL_URL: dummymail://
+  ENABLE_USER_REGISTRATION: "True"
+
+services:
+  glitchtip-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: glitchtip
+    restart: unless-stopped
+
+  glitchtip-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  glitchtip-web:
+    image: glitchtip/glitchtip:latest
+    ports:
+      - "8000:8000"
+    environment: *glitchtip-environment
+    depends_on:
+      - glitchtip-db
+      - glitchtip-redis
+    restart: unless-stopped
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:latest
+    command: ./bin/run-celery-with-beat.sh
+    environment: *glitchtip-environment
+    depends_on:
+      - glitchtip-db
+      - glitchtip-redis
+    restart: unless-stopped

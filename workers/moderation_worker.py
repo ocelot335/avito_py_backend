@@ -11,10 +11,19 @@ from services.predict import PredictionService
 from repositories.ad_repository import AdRepository
 from repositories.task_repository import ModerationTaskRepository
 from models.prediction import PredictionRequestDto
+import sentry_sdk
+from exceptions import MaxRetriesExceededError
 
 settings = get_settings()
 logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger("moderation_worker")
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=1.0,
+        environment=settings.mlflow_stage or "development",
+    )
 
 
 async def process_message(
@@ -39,7 +48,11 @@ async def process_message(
         try:
             ad_features = await ad_repo.get_ad_features(item_id)
             if not ad_features:
-                raise ValueError(f"объявление с id {item_id} не найдено в бд")
+                logger.info(
+                    f"объявление {item_id} не найдено или уже закрыто пользователем. "
+                    f"пропускаем задачу {task_id} без ретраев."
+                )
+                return
 
             ml_request = PredictionRequestDto(
                 seller_id=ad_features.seller_id,
@@ -65,6 +78,7 @@ async def process_message(
 
         except Exception as e:
             error_msg = str(e)
+            sentry_sdk.capture_exception(e)
             if attempt < settings.max_retries:
                 logger.warning(
                     f"ошибка при обработке task_id={task_id}: {e} "
@@ -77,6 +91,11 @@ async def process_message(
                     f"последняя ошибка: {error_msg}",
                     exc_info=True,
                 )
+
+                final_error = MaxRetriesExceededError(
+                    f"Task {task_id} failed after {settings.max_retries} retries. Moved to DLQ. Last error: {error_msg}"
+                )
+                sentry_sdk.capture_exception(final_error)
 
                 try:
                     await task_repo.update_moderation_task_status(
