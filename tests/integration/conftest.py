@@ -74,6 +74,13 @@ async def async_db_pool(postgres_container):
                 created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 processed_at TIMESTAMP WITH TIME ZONE
             );
+
+            CREATE TABLE IF NOT EXISTS account (
+                id SERIAL PRIMARY KEY,
+                login TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL,
+                is_blocked BOOLEAN NOT NULL DEFAULT FALSE
+            );
         """
         )
 
@@ -81,5 +88,6 @@ async def async_db_pool(postgres_container):
 
     async with pool.acquire() as conn:
         await conn.execute("TRUNCATE TABLE sellers CASCADE;")
+        await conn.execute("TRUNCATE TABLE account CASCADE;")
 
     await pool.close()

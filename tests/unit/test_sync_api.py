@@ -27,12 +27,13 @@ def test_predict_violation_false(
     assert response.json()["is_violation"] is False
 
 
-def test_service_unavailable_no_model(client, valid_payload):
+def test_service_unavailable_no_model(
+    client, override_dependencies, valid_payload
+):
     service = PredictionService(model=None)
     app.dependency_overrides[get_prediction_service] = lambda: service
     response = client.post("/predict/", json=valid_payload)
     assert response.status_code == 503
-    app.dependency_overrides = {}
 
 
 def test_validation_error_wrong_type(

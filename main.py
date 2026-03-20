@@ -11,7 +11,7 @@ from services.predict import PredictionService
 from db.database import create_pool, close_pool
 from clients.kafka import KafkaProducerClient
 from clients.redis import RedisClient
-
+from routers.auth import auth_router
 from middlewares.prometheus import PrometheusMiddleware
 from routers.system import system_router
 
@@ -86,6 +86,7 @@ async def root():
 
 
 app.include_router(predict_router, prefix="/predict")
+app.include_router(auth_router, prefix="/auth")
 app.include_router(system_router)
 
 if __name__ == "__main__":

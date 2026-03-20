@@ -49,3 +49,22 @@ def test_async_predict_idempotency(client, override_dependencies):
     assert response.json()["task_id"] == 999
     task_repo.create_moderation_task.assert_not_called()
     kafka.send_moderation_request.assert_not_called()
+
+
+def test_close_ad_cache_invalidation(client, override_dependencies):
+    task_repo = override_dependencies["task_repo"]
+    predict_redis = override_dependencies["predict_redis"]
+    task_redis = override_dependencies["task_redis"]
+    active_redis = override_dependencies["active_redis"]
+
+    task_repo.get_task_ids_by_item_id.return_value = [10, 11]
+
+    response = client.post("/predict/close/6767")
+
+    assert response.status_code == 200
+
+    predict_redis.delete.assert_called_once_with(6767)
+
+    active_redis.delete.assert_called_once_with(6767)
+
+    assert task_redis.delete.call_count == 2

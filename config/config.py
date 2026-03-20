@@ -14,10 +14,10 @@ class Settings(BaseSettings):
     mlflow_model_name: str = "moderation_model"
     mlflow_stage: str = "Production"
 
-    postgres_user: str
-    postgres_password: str
-    postgres_db: str
-    postgres_port: int
+    postgres_user: str = "postgres"
+    postgres_password: str = "postgres"
+    postgres_db: str = "hw"
+    postgres_port: int = 5435
     postgres_host: str = "localhost"
 
     kafka_bootstrap_servers: str = "localhost:9092"
@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     redis_task_pending_ttl_sec: int = 3
     redis_task_completed_ttl_sec: int = 3600
     redis_active_task_ttl_sec: int = 60
+    redis_account_ttl_sec: int = 300
+
+    jwt_secret_key: str = "default_key_default_key_default_key_default_key"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440
 
     sentry_dsn: Optional[str] = None
 

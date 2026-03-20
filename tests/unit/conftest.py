@@ -16,6 +16,8 @@ from repositories.seller_repository import get_seller_repository
 from storages.prediction_redis_storage import get_prediction_redis_storage
 from storages.task_redis_storage import get_task_redis_storage
 from storages.active_task_redis_storage import get_active_task_redis_storage
+from routers.auth import get_current_user
+from models.db import AccountDto
 
 
 @pytest.fixture
@@ -134,6 +136,10 @@ def override_dependencies(
 ):
     service = PredictionService(model=mock_model)
 
+    fake_user = AccountDto(
+        id=1, login="tester", password="123", is_blocked=False
+    )
+
     app.dependency_overrides[get_prediction_service] = lambda: service
     app.dependency_overrides[get_ad_repository] = lambda: mock_ad_repo
     app.dependency_overrides[get_seller_repository] = lambda: mock_seller_repo
@@ -146,6 +152,7 @@ def override_dependencies(
     app.dependency_overrides[get_active_task_redis_storage] = (
         lambda: mock_active_task_redis
     )
+    app.dependency_overrides[get_current_user] = lambda: fake_user
 
     mocks = {
         "service": service,

@@ -1,7 +1,10 @@
+import asyncpg
 import pytest
 from repositories.ad_repository import AdRepository
 from repositories.seller_repository import SellerRepository
 from repositories.task_repository import ModerationTaskRepository
+from repositories.account_repository import AccountRepository
+import hashlib
 
 pytestmark = pytest.mark.integration
 
@@ -100,3 +103,81 @@ async def test_moderation_task_status_updates(async_db_pool):
     assert completed_task.status == "completed"
     assert completed_task.is_violation is True
     assert completed_task.probability == 0.99
+
+
+@pytest.mark.asyncio
+async def test_db_edge_cases_nonexistent_ids(async_db_pool):
+    repo = AccountRepository(async_db_pool)
+
+    missing_user = await repo.get_by_id(999999)
+    assert missing_user is None
+
+    await repo.delete(999999)
+
+    await repo.block(999999)
+
+    still_missing = await repo.get_by_id(999999)
+    assert still_missing is None
+
+
+@pytest.mark.asyncio
+async def test_account_create_and_get(async_db_pool):
+    repo = AccountRepository(async_db_pool)
+
+    account = await repo.create(login="test_user", password="secret_password")
+    assert account.id is not None
+    assert account.login == "test_user"
+
+    expected_hash = hashlib.md5("secret_password".encode()).hexdigest()
+    assert account.password == expected_hash
+
+    assert account.is_blocked is False
+
+    fetched = await repo.get_by_id(account.id)
+    assert fetched is not None
+    assert fetched.id == account.id
+    assert fetched.login == "test_user"
+
+
+@pytest.mark.asyncio
+async def test_account_unique_login_conflict(async_db_pool):
+    repo = AccountRepository(async_db_pool)
+
+    await repo.create(login="admin", password="123")
+
+    with pytest.raises(asyncpg.exceptions.UniqueViolationError):
+        await repo.create(login="admin", password="456")
+
+
+@pytest.mark.asyncio
+async def test_get_by_login_and_password(async_db_pool):
+    repo = AccountRepository(async_db_pool)
+    await repo.create(login="auth_test", password="correct_pass")
+
+    account = await repo.get_by_login_and_password("auth_test", "correct_pass")
+    assert account is not None
+    assert account.login == "auth_test"
+
+    wrong_pwd = await repo.get_by_login_and_password("auth_test", "wrong_pass")
+    assert wrong_pwd is None
+
+    wrong_login = await repo.get_by_login_and_password(
+        "nobody", "correct_pass"
+    )
+    assert wrong_login is None
+
+
+@pytest.mark.asyncio
+async def test_block_and_delete_account(async_db_pool):
+    repo = AccountRepository(async_db_pool)
+    acc = await repo.create(login="block_me", password="123")
+
+    assert acc.is_blocked is False
+
+    await repo.block(acc.id)
+    blocked_acc = await repo.get_by_id(acc.id)
+    assert blocked_acc.is_blocked is True
+
+    await repo.delete(acc.id)
+    deleted_acc = await repo.get_by_id(acc.id)
+    assert deleted_acc is None

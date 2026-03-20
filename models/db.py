@@ -35,3 +35,10 @@ class ModerationTaskDto(BaseModel):
     status: str
     is_violation: Optional[bool] = None
     probability: Optional[float] = None
+
+
+class AccountDto(BaseModel):
+    id: int
+    login: str
+    password: str
+    is_blocked: bool

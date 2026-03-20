@@ -17,10 +17,14 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: glitchtip
     restart: unless-stopped
+    volumes:
+      - glitchtip_pg_data:/var/lib/postgresql/data
 
   glitchtip-redis:
     image: redis:7-alpine
     restart: unless-stopped
+    volumes:
+      - glitchtip_redis_data:/data
 
   glitchtip-web:
     image: glitchtip/glitchtip:latest
@@ -40,3 +44,7 @@ services:
       - glitchtip-db
       - glitchtip-redis
     restart: unless-stopped
+
+volumes:
+  glitchtip_pg_data:
+  glitchtip_redis_data:

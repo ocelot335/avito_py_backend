@@ -37,6 +37,8 @@ from storages.active_task_redis_storage import (
     ActiveTaskRedisStorage,
     get_active_task_redis_storage,
 )
+from routers.auth import get_current_user
+from models.db import AccountDto
 from clients.kafka import KafkaProducerClient
 from config.config import get_settings
 
@@ -66,6 +68,7 @@ def get_kafka_client(request: Request) -> KafkaProducerClient:
 )
 def predict(
     to_predict: PredictionRequestDto,
+    current_user: AccountDto = Depends(get_current_user),
     prediction_service: PredictionService = Depends(get_prediction_service),
 ):
     return prediction_service.predict_ad_approve(to_predict)
@@ -78,6 +81,7 @@ def predict(
 )
 async def simple_predict(
     item_id: int = Path(..., ge=0),
+    current_user: AccountDto = Depends(get_current_user),
     prediction_service: PredictionService = Depends(get_prediction_service),
     repo: AdRepository = Depends(get_ad_repository),
     predict_redis: PredictionRedisStorage = Depends(
@@ -119,6 +123,7 @@ async def simple_predict(
 )
 async def async_predict(
     item_id: int = Path(..., ge=0),
+    current_user: AccountDto = Depends(get_current_user),
     ad_repo: AdRepository = Depends(get_ad_repository),
     task_repo: ModerationTaskRepository = Depends(get_task_repository),
     kafka_client: KafkaProducerClient = Depends(get_kafka_client),
@@ -180,6 +185,7 @@ async def async_predict(
 )
 async def get_moderation_result(
     task_id: int = Path(..., ge=1, description="id задачи"),
+    current_user: AccountDto = Depends(get_current_user),
     task_repo: ModerationTaskRepository = Depends(get_task_repository),
     task_redis: TaskRedisStorage = Depends(get_task_redis_storage),
 ):
@@ -214,6 +220,7 @@ async def get_moderation_result(
 )
 async def close_ad(
     item_id: int = Path(..., ge=0),
+    current_user: AccountDto = Depends(get_current_user),
     ad_repo: AdRepository = Depends(get_ad_repository),
     task_repo: ModerationTaskRepository = Depends(get_task_repository),
     predict_redis: PredictionRedisStorage = Depends(

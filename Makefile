@@ -1,4 +1,4 @@
-.PHONY: up down migrate api worker test
+.PHONY: up down sentry-up sentry-down migrate api worker test test-unit test-integration
 
 up:
 	docker-compose up -d
@@ -18,8 +18,16 @@ migrate:
 api:
 	uvicorn main:app --host 0.0.0.0 --port 8003
 
+N ?= 1
+
 worker:
-	python -m workers.moderation_worker
+	@bash -c 'trap "kill 0" SIGINT SIGTERM EXIT; \
+	for ((i=1; i<=$(N); i++)); do \
+		python -m workers.moderation_worker & \
+		sleep 1; \
+	done; \
+	wait'
+
 
 test:
 	pytest -v
